@@ -1,0 +1,18 @@
+# Web Framework & Server
+fastapi[standard]>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+
+# IDUN Guardian SDK
+idun-guardian-sdk>=0.1.4
+
+# Data Processing & Analysis
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Configuration
+python-dotenv>=1.0.0
