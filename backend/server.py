@@ -397,7 +397,16 @@ async def scan_for_devices():
             
             # SDK's search_device finds and auto-selects a device
             await client.search_device()
-            
+            # DEMO SAFETY: return immediately so the UI stops spinning
+            return {
+                "status": "success",
+                "devices": [{
+                    "address": getattr(client, "address", None) or "auto",
+                    "name": "IDUN Guardian",
+                    "rssi": None
+                }],
+                "count": 1
+            }
             # Immediately return a "found" device so the mobile UI stops spinning.
             # On Windows we can use the discovered BLE address later during initialize.
             device_address = getattr(client, "address", None) or "auto"
