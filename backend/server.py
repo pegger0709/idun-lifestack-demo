@@ -4,6 +4,16 @@ from pydantic import BaseModel
 from typing import Optional
 import sys
 import os
+import asyncio
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    try:
+        from bleak.backends.winrt.util import allow_sta
+        allow_sta()
+        print("[BLEAK] allow_sta() enabled for Windows")
+    except Exception as e:
+        print(f"[BLEAK] allow_sta() not available: {e}")
 
 # Add parent directory to path to allow imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,7 +28,6 @@ except ImportError:
     from ..paf_protocol.paf_from_recording import compute_paf_from_recording
     from .paf_protocol_service import PAFProtocolService, ProtocolPhase
 import random
-import asyncio
 import csv
 import os
 import signal
@@ -389,41 +398,41 @@ async def scan_for_devices():
             # SDK's search_device finds and auto-selects a device
             await client.search_device()
             
-            # Get the found device's MAC address for display
+            # Immediately return a "found" device so the mobile UI stops spinning.
+            # On Windows we can use the discovered BLE address later during initialize.
+            device_address = getattr(client, "address", None) or "auto"
+            
+            # Try to get MAC address for display (non-blocking, don't wait if it fails)
+            mac_address = None
             try:
                 mac_address = await client.get_device_mac_address()
                 print(f"[INFO] IDUN SDK found device MAC: {mac_address}")
-                
-                # Disconnect so user can choose to connect later
-                try:
-                    await client.disconnect_device()
-                except:
-                    pass
-                
-                # Return "auto" as address - the SDK will re-search when connecting
-                # On macOS, BLE uses UUIDs not MAC addresses, so we can't use MAC to connect
-                return {
-                    "status": "success",
-                    "devices": [{
-                        "address": "auto",  # Use auto-discovery for connection
-                        "name": f"IDUN Guardian ({mac_address[-5:] if mac_address else 'Unknown'})",
-                        "mac_address": mac_address,  # Include MAC for display
-                        "rssi": None
-                    }],
-                    "count": 1
-                }
             except Exception as e:
                 print(f"[INFO] Could not get device MAC after search: {e}")
-                # Device was found but couldn't get MAC - still return success
-                return {
-                    "status": "success",
-                    "devices": [{
-                        "address": "auto",
-                        "name": "IDUN Guardian (Auto-detected)",
-                        "rssi": None
-                    }],
-                    "count": 1
-                }
+            
+            # Disconnect so user can choose to connect later
+            try:
+                await client.disconnect_device()
+            except:
+                pass
+            
+            # Return device info immediately
+            device_name = "IDUN Guardian"
+            if mac_address:
+                device_name = f"IDUN Guardian ({mac_address[-5:]})"
+            elif device_address != "auto":
+                device_name = f"IDUN Guardian ({device_address[-5:]})"
+            
+            return {
+                "status": "success",
+                "devices": [{
+                    "address": device_address,
+                    "name": device_name,
+                    "mac_address": mac_address,  # Include MAC for display if available
+                    "rssi": None
+                }],
+                "count": 1
+            }
                 
         except Exception as sdk_error:
             print(f"[INFO] IDUN SDK search failed: {sdk_error}, falling back to BLE scan...")
