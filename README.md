@@ -6,7 +6,7 @@ Real-time EEG streaming from IDUN Guardian earbuds to a mobile app for brain act
 
 ## 🚀 TL;DR Quick Start
 
-**Prerequisites:** Python 3.8+, Node.js 22.14.0+, IDUN Guardian earbuds (optional)
+**Prerequisites:** Python 3.8+, Node.js 22.14.0+, Expo Go, IDUN Guardian earbuds (optional)
 
 ### Checklist:
 
