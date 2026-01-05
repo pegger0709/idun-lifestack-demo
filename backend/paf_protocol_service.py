@@ -9,6 +9,8 @@ import json
 import time
 import asyncio
 import threading
+import random
+import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Any
 from enum import Enum
@@ -46,6 +48,76 @@ try:
 except Exception as e:
     GuardianClient = None
     _sdk_import_error = e
+
+
+class MockGuardianController:
+    """Mock Guardian controller for testing without physical device"""
+
+    def __init__(self, recorder, device_address=None):
+        self.rec = recorder
+        self.device_address = device_address
+        self.last_imp = None
+        self.eeg_seen = False
+        self.eeg_error = None
+        self.last_imp_values = []
+        self.MAX_IMP_SAMPLES = 10
+        self.device_mac_address = device_address
+        self.device_name = "IDUN Guardian (Mock)"
+
+        # Simulation state
+        self._sample_count = 0
+        self._running = False
+        self._thread = None
+
+        print("[MOCK] Mock Guardian controller initialized")
+
+    def start(self):
+        """Start the mock controller"""
+        print("[MOCK] Starting mock controller")
+        self._running = True
+        # Simulate successful connection immediately
+        self.last_imp = 200000  # 200 kOhm - good quality
+        print("[MOCK] Mock device connected with impedance: 200 kOhm")
+
+    def trigger_start_eeg(self):
+        """Trigger EEG streaming"""
+        print("[MOCK] Starting mock EEG stream")
+        self.eeg_seen = True
+        self._start_eeg_simulation()
+
+    def _start_eeg_simulation(self):
+        """Start simulated EEG data generation in background thread"""
+        def generate_eeg():
+            print("[MOCK] EEG simulation thread started")
+            while self._running and self.eeg_seen:
+                # Generate alpha wave (10 Hz) with noise
+                t = self._sample_count / FS
+                base_signal = 10.0 * np.sin(2 * np.pi * 10.0 * t)
+                noise = random.uniform(-2, 2)
+                value = base_signal + noise
+
+                # Add to recorder (samples expects tuples of (timestamp, value))
+                self.rec.samples.append((self._sample_count, value))
+                self.rec.sample_count += 1
+                self._sample_count += 1
+
+                # Sleep to simulate 250 Hz sampling
+                time.sleep(1.0 / FS)
+
+        self._thread = threading.Thread(target=generate_eeg, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        """Stop the mock controller"""
+        print("[MOCK] Stopping mock controller")
+        self._running = False
+        self.eeg_seen = False
+        if self._thread:
+            self._thread.join(timeout=1.0)
+
+    def cleanup(self):
+        """Cleanup mock resources"""
+        self.stop()
 
 
 class ProtocolPhase(Enum):
@@ -111,11 +183,20 @@ class PAFProtocolService:
         """Initialize the Guardian controller with optional specific device address"""
         if self.controller is not None:
             return True
-            
+
+        # Check for mock mode
+        use_mock = os.getenv("USE_MOCK_DEVICE", "").lower() == "true"
+
+        if use_mock:
+            print("[MOCK] Using mock device (USE_MOCK_DEVICE=true)")
+            self.controller = MockGuardianController(self.recorder, device_address=device_address)
+            self.controller.start()
+            return True
+
         if GuardianClient is None:
             print(f"[ERROR] Guardian SDK not available: {_sdk_import_error}")
             return False
-        
+
         # Controller uses the recorder instance (like GUI does)
         self.controller = GuardianController(self.recorder, device_address=device_address)
         self.controller.start()
